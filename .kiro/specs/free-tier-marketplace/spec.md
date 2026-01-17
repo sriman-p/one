@@ -794,3 +794,757 @@ export class PatternMetrics {
 This comprehensive enterprise architecture patterns section provides the foundation for building a resilient, scalable marketplace that leverages proven patterns from industry leaders while operating within free tier constraints.
 
 ---
+
+## Technology Stack
+
+This section defines the comprehensive technology stack for the zero-cost enterprise-grade multi-vendor e-commerce marketplace. All technology selections prioritize free tier compatibility, resource efficiency, and enterprise-grade capabilities while ensuring zero operational costs.
+
+### Technology Selection Principles
+
+The technology stack adheres to the following principles:
+
+1. **Free Tier First**: All technologies must operate within free tier constraints
+2. **Resource Efficiency**: Minimize memory, CPU, and storage footprints
+3. **Enterprise Grade**: Production-ready with proven track records
+4. **TypeScript Native**: Strong typing and developer productivity
+5. **Cloud Native**: Kubernetes-ready and containerizable
+6. **Active Community**: Strong ecosystem and long-term viability
+
+### Core Technology Matrix
+
+| Layer | Technology | Version | Purpose | Free Tier Impact |
+|-------|------------|---------|---------|------------------|
+| **Runtime** | Node.js | 20 LTS | Server runtime | Efficient V8 engine |
+| **Language** | TypeScript | 5.x | Type safety | Zero runtime cost |
+| **Backend Framework** | NestJS | 10.x | API framework | Modular, DI support |
+| **Frontend Framework** | Next.js | 14.x | React framework | ISR for caching |
+| **UI Components** | shadcn/ui + Radix | Latest | Component library | Copy-paste, no bundle |
+| **Styling** | Tailwind CSS | 3.x | Utility CSS | Minimal runtime |
+| **ORM** | Prisma | 5.x | Database access | Connection pooling |
+| **Validation** | Zod | 3.x | Schema validation | Lightweight, fast |
+| **State Management (Server)** | TanStack Query | 5.x | Server state | Built-in caching |
+| **State Management (Client)** | Zustand | 4.x | Client state | 1KB gzipped |
+| **Testing (Unit)** | Vitest | Latest | Unit testing | Fast, ESM native |
+| **Testing (E2E)** | Playwright | Latest | E2E testing | Cross-browser |
+| **Job Queue** | BullMQ | 5.x | Background jobs | Redis-based |
+| **Container Runtime** | Docker | 24.x | Containerization | OCI compliant |
+| **Orchestration** | Kubernetes | 1.28+ | Container orchestration | Oracle OKE |
+
+### Frontend Architecture
+
+#### Framework: Next.js 14/15 with App Router
+
+**Selection Rationale:**
+- **Incremental Static Regeneration (ISR)**: Reduces API calls and database queries through intelligent caching
+- **Server Components**: Minimize client-side JavaScript, reducing Vercel/Cloudflare bandwidth
+- **Edge Runtime**: Deploy API routes to Vercel Edge for free compute
+- **Image Optimization**: Built-in optimization reduces storage and bandwidth costs
+- **Zero Config**: Reduces development and maintenance overhead
+
+**Free Tier Optimization:**
+```typescript
+// next.config.js - Optimized for free tier
+module.exports = {
+  // Enable experimental features for better performance
+  experimental: {
+    serverActions: true,
+    serverComponentsExternalPackages: ['@prisma/client'],
+  },
+  
+  // Optimize images for bandwidth savings
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 31536000, // 1 year for immutable images
+    deviceSizes: [640, 750, 828, 1080, 1200],
+    imageSizes: [16, 32, 48, 64, 96],
+  },
+  
+  // Aggressive caching for static pages
+  headers: async () => [
+    {
+      source: '/(.*)',
+      headers: [
+        {
+          key: 'Cache-Control',
+          value: 'public, max-age=31536000, immutable',
+        },
+      ],
+    },
+  ],
+  
+  // Minimize bundle size
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  
+  // Output standalone for smaller Docker images
+  output: 'standalone',
+};
+```
+
+**Resource Budget:**
+- Initial Bundle: < 150KB gzipped
+- Route Bundle: < 50KB per page
+- Total Page Weight: < 800KB
+- Lighthouse Score: > 95
+
+#### UI Library: shadcn/ui + Radix Primitives
+
+**Selection Rationale:**
+- **Copy-Paste Architecture**: No package dependencies, smaller bundles
+- **Radix Primitives**: Accessible, headless components with minimal overhead
+- **Tailwind Integration**: Utility-first CSS reduces total CSS size
+- **Full Ownership**: Customize without version lock-in
+
+**Component Architecture:**
+```typescript
+// components/ui/button.tsx - Optimized component pattern
+import * as React from 'react';
+import { Slot } from '@radix-ui/react-slot';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '@/lib/utils';
+
+const buttonVariants = cva(
+  'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors',
+  {
+    variants: {
+      variant: {
+        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        outline: 'border border-input bg-background hover:bg-accent',
+        ghost: 'hover:bg-accent hover:text-accent-foreground',
+      },
+      size: {
+        default: 'h-10 px-4 py-2',
+        sm: 'h-9 rounded-md px-3',
+        lg: 'h-11 rounded-md px-8',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
+    },
+  }
+);
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean;
+}
+
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : 'button';
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}
+      />
+    );
+  }
+);
+```
+
+#### State Management Strategy
+
+**Server State: TanStack Query (React Query)**
+
+Free tier optimizations:
+```typescript
+// lib/query-client.ts
+import { QueryClient } from '@tanstack/react-query';
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Aggressive caching to minimize API calls
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
+      
+      // Reduce network traffic
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      
+      // Retry strategy for resilience
+      retry: (failureCount, error: any) => {
+        if (error?.status === 404) return false;
+        return failureCount < 3;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    },
+    mutations: {
+      // Optimistic updates to reduce perceived latency
+      onMutate: async (variables) => {
+        // Cancel outgoing refetches
+        await queryClient.cancelQueries();
+      },
+    },
+  },
+});
+```
+
+**Client State: Zustand**
+
+Lightweight store pattern:
+```typescript
+// stores/ui-store.ts
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+interface UIStore {
+  theme: 'light' | 'dark';
+  sidebarOpen: boolean;
+  setTheme: (theme: 'light' | 'dark') => void;
+  toggleSidebar: () => void;
+}
+
+export const useUIStore = create<UIStore>()(
+  persist(
+    (set) => ({
+      theme: 'light',
+      sidebarOpen: true,
+      setTheme: (theme) => set({ theme }),
+      toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+    }),
+    {
+      name: 'ui-storage',
+      // Only persist theme preference
+      partialize: (state) => ({ theme: state.theme }),
+    }
+  )
+);
+```
+
+### Backend Architecture
+
+#### Framework: NestJS 10.x
+
+**Selection Rationale:**
+- **Dependency Injection**: Clean architecture, testable code
+- **Modular Structure**: Aligns with domain-driven design
+- **TypeScript Native**: First-class TypeScript support
+- **Microservice Ready**: gRPC, Redis, Kafka support built-in
+- **Enterprise Features**: Guards, interceptors, pipes out of the box
+
+**Free Tier Optimizations:**
+```typescript
+// main.ts - Production-optimized bootstrap
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe, Logger } from '@nestjs/common';
+import { AppModule } from './app.module';
+import * as compression from 'compression';
+import helmet from 'helmet';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    // Disable debug logging in production
+    logger: process.env.NODE_ENV === 'production' 
+      ? ['error', 'warn'] 
+      : ['log', 'error', 'warn', 'debug', 'verbose'],
+  });
+  
+  // Security headers
+  app.use(helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === 'production',
+  }));
+  
+  // Compression to reduce bandwidth
+  app.use(compression({
+    threshold: 1024, // Only compress responses > 1KB
+    level: 6, // Balance between speed and compression ratio
+  }));
+  
+  // Global validation pipe
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      // Cache transformed results
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    })
+  );
+  
+  // Graceful shutdown for Kubernetes
+  app.enableShutdownHooks();
+  
+  await app.listen(process.env.PORT || 3000);
+  Logger.log(`Application running on port ${process.env.PORT || 3000}`);
+}
+
+bootstrap();
+```
+
+**Module Structure:**
+```typescript
+// modules/products/products.module.ts
+import { Module } from '@nestjs/common';
+import { ProductsController } from './products.controller';
+import { ProductsService } from './products.service';
+import { ProductsRepository } from './products.repository';
+import { CacheModule } from '@nestjs/cache-manager';
+import { RedisClientOptions } from 'redis';
+import * as redisStore from 'cache-manager-redis-store';
+
+@Module({
+  imports: [
+    // Redis caching to reduce database queries
+    CacheModule.register<RedisClientOptions>({
+      store: redisStore,
+      host: process.env.REDIS_HOST,
+      port: parseInt(process.env.REDIS_PORT),
+      ttl: 300, // 5 minutes default
+      max: 1000, // Maximum items in cache
+    }),
+  ],
+  controllers: [ProductsController],
+  providers: [ProductsService, ProductsRepository],
+  exports: [ProductsService],
+})
+export class ProductsModule {}
+```
+
+#### Data Access: Prisma ORM
+
+**Selection Rationale:**
+- **Type-Safe Queries**: Generated types from schema
+- **Connection Pooling**: Efficient database connection management
+- **Migration System**: Version-controlled schema changes
+- **Multi-Database**: Support for PostgreSQL, MongoDB, etc.
+
+**Free Tier Connection Pooling:**
+```typescript
+// lib/prisma.ts
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
+
+export const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL,
+      },
+    },
+  });
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+// Connection pool configuration for free tier
+// DATABASE_URL="postgresql://user:pass@host:5432/db?connection_limit=5&pool_timeout=10"
+```
+
+**Schema Optimization for Free Tier:**
+```prisma
+// prisma/schema.prisma
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "postgresqlExtensions"]
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"] // For Alpine Docker images
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm, btree_gin] // Full-text search optimization
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  vendorId    String
+  vendor      Vendor   @relation(fields: [vendorId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Indexes for query optimization
+  @@index([vendorId])
+  @@index([createdAt(sort: Desc)])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin) // Full-text search
+}
+```
+
+### Background Processing
+
+#### Job Queue: BullMQ + Redis
+
+**Selection Rationale:**
+- **Redis-Based**: Leverages existing Upstash Redis free tier
+- **Priority Queues**: Critical jobs processed first
+- **Job Scheduling**: Cron-like scheduling
+- **Rate Limiting**: Prevents resource exhaustion
+
+**Free Tier Configuration:**
+```typescript
+// lib/queue.ts
+import { Queue, Worker, QueueScheduler } from 'bullmq';
+import { Redis } from 'ioredis';
+
+// Shared Redis connection for free tier
+const redisConnection = new Redis(process.env.REDIS_URL, {
+  maxRetriesPerRequest: null,
+  enableReadyCheck: false,
+});
+
+// Email queue with priority
+export const emailQueue = new Queue('email', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 2000,
+    },
+    removeOnComplete: {
+      age: 3600, // Keep completed jobs for 1 hour
+      count: 100, // Keep last 100 completed jobs
+    },
+    removeOnFail: {
+      age: 86400, // Keep failed jobs for 24 hours
+    },
+  },
+});
+
+// Worker with concurrency control for free tier
+export const emailWorker = new Worker(
+  'email',
+  async (job) => {
+    // Process email job
+    const { to, subject, body } = job.data;
+    await sendEmail(to, subject, body);
+  },
+  {
+    connection: redisConnection,
+    concurrency: 2, // Limit concurrent jobs to preserve resources
+    limiter: {
+      max: 100, // Maximum 100 jobs
+      duration: 60000, // per minute
+    },
+  }
+);
+
+// Queue scheduler for delayed jobs
+export const emailScheduler = new QueueScheduler('email', {
+  connection: redisConnection,
+});
+```
+
+### Validation and Type Safety
+
+#### Schema Validation: Zod
+
+**Selection Rationale:**
+- **TypeScript First**: Infer types from schemas
+- **Zero Dependencies**: Minimal bundle size
+- **Runtime Validation**: Catch errors at API boundaries
+- **Composable**: Reusable schema definitions
+
+**Validation Patterns:**
+```typescript
+// schemas/product.schema.ts
+import { z } from 'zod';
+
+// Base product schema
+export const productSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(5000).optional(),
+  price: z.number().positive().multipleOf(0.01),
+  vendorId: z.string().cuid(),
+  categoryId: z.string().cuid(),
+  images: z.array(z.string().url()).min(1).max(10),
+  stock: z.number().int().nonnegative(),
+  status: z.enum(['draft', 'active', 'archived']),
+});
+
+// Create product DTO
+export const createProductSchema = productSchema.omit({ vendorId: true });
+
+// Update product DTO
+export const updateProductSchema = productSchema.partial();
+
+// Type inference
+export type Product = z.infer<typeof productSchema>;
+export type CreateProductDto = z.infer<typeof createProductSchema>;
+export type UpdateProductDto = z.infer<typeof updateProductSchema>;
+
+// NestJS integration
+import { createZodDto } from 'nestjs-zod';
+
+export class CreateProductDto extends createZodDto(createProductSchema) {}
+```
+
+### Testing Strategy
+
+#### Unit Testing: Vitest
+
+**Selection Rationale:**
+- **Vite-Powered**: 10x faster than Jest
+- **ESM Native**: No transpilation needed
+- **Compatible API**: Drop-in Jest replacement
+- **Lightweight**: Minimal resource usage
+
+**Test Configuration:**
+```typescript
+// vitest.config.ts
+import { defineConfig } from 'vitest/config';
+import { resolve } from 'path';
+
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'node',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: [
+        'node_modules/',
+        'dist/',
+        '**/*.spec.ts',
+        '**/*.test.ts',
+      ],
+      lines: 80,
+      functions: 80,
+      branches: 80,
+      statements: 80,
+    },
+    // Run tests in parallel for speed
+    pool: 'threads',
+    poolOptions: {
+      threads: {
+        maxThreads: 4,
+        minThreads: 1,
+      },
+    },
+  },
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, './src'),
+    },
+  },
+});
+```
+
+#### E2E Testing: Playwright
+
+**Selection Rationale:**
+- **Cross-Browser**: Test Chrome, Firefox, Safari
+- **Fast Execution**: Parallel test execution
+- **Auto-Wait**: Built-in waiting mechanisms
+- **CI Friendly**: GitHub Actions integration
+
+**Test Configuration:**
+```typescript
+// playwright.config.ts
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './tests/e2e',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
+  reporter: 'html',
+  
+  use: {
+    baseURL: process.env.BASE_URL || 'http://localhost:3000',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+  },
+  
+  // Test critical user flows only
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+  
+  // Local dev server
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+  },
+});
+```
+
+### Container and Orchestration
+
+#### Container Runtime: Docker
+
+**Multi-Stage Build for Minimal Images:**
+```dockerfile
+# Dockerfile - Optimized for free tier
+FROM node:20-alpine AS base
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# Dependencies stage
+FROM base AS deps
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable pnpm && pnpm install --frozen-lockfile
+
+# Builder stage
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN corepack enable pnpm && pnpm build
+
+# Runner stage - minimal production image
+FROM base AS runner
+ENV NODE_ENV production
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nestjs
+
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+
+USER nestjs
+
+EXPOSE 3000
+
+CMD ["node", "dist/main.js"]
+```
+
+#### Orchestration: Kubernetes
+
+**Resource-Constrained Deployment:**
+```yaml
+# kubernetes/api-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: marketplace-api
+  namespace: marketplace
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: marketplace-api
+  template:
+    metadata:
+      labels:
+        app: marketplace-api
+        version: v1
+    spec:
+      containers:
+      - name: api
+        image: ghcr.io/org/marketplace-api:latest
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+        
+        # Free tier resource limits
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        # Environment variables
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: marketplace-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: marketplace-secrets
+              key: redis-url
+        
+        # Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+```
+
+### Technology Stack Summary
+
+The selected technology stack achieves the following key objectives:
+
+1. **Zero Operational Costs**: All technologies operate efficiently within free tier constraints
+2. **Enterprise Grade**: Production-proven frameworks with strong community support
+3. **Resource Efficient**: Optimized for minimal CPU, memory, and bandwidth usage
+4. **Type Safe**: End-to-end TypeScript for reliability and maintainability
+5. **Cloud Native**: Containerized and Kubernetes-ready architecture
+6. **Developer Friendly**: Modern DX with excellent tooling and documentation
+
+**Resource Footprint Summary:**
+```
+Frontend (Next.js):
+  - Build Time: < 2 minutes (Cloudflare/Vercel free tier)
+  - Bundle Size: < 150KB gzipped
+  - Memory: < 100MB per instance
+
+Backend (NestJS):
+  - Container Size: < 200MB Alpine-based image
+  - Memory: 256-512MB per pod
+  - CPU: 250-500m per pod
+  - Startup Time: < 10 seconds
+
+Database Layer:
+  - Prisma Client: ~50MB in container
+  - Connection Pool: 5-10 connections per instance
+  - Query Performance: < 50ms P95 with indexes
+
+Caching Layer:
+  - Redis Memory: < 100MB per instance
+  - BullMQ Overhead: ~20MB
+  - Cache Hit Rate: > 80% target
+
+Total Resource Budget per Service:
+  - Memory: 256-512MB
+  - CPU: 0.25-0.5 cores
+  - Storage: 200MB per container
+  - Network: < 1GB/day per service
+```
+
+This technology stack provides a solid foundation for building an enterprise-grade marketplace while maintaining zero operational costs through efficient use of free tier services.
+
+---
